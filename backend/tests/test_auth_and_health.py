@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for health endpoint and JWT authentication security dependency.
 """
 
@@ -65,3 +65,35 @@ def test_jwt_missing_sub_returns_401():
     response = client.get("/api/v1/conversations", headers=headers)
     assert response.status_code == 401
     assert "missing user identifier" in response.json()["detail"]
+
+
+def test_cors_headers_for_allowed_origin():
+    # Regular GET with allowed Origin
+    response = client.get(
+        "/api/v1/health",
+        headers={"Origin": "http://localhost:5173"},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert response.headers.get("access-control-allow-credentials") == "true"
+
+    # Preflight OPTIONS request
+    preflight = client.options(
+        "/api/v1/conversations",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization, content-type",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert preflight.headers.get("access-control-allow-credentials") == "true"
+
+    # Disallowed origin
+    bad_origin_res = client.get(
+        "/api/v1/health",
+        headers={"Origin": "http://unauthorized-domain.com"},
+    )
+    assert bad_origin_res.status_code == 200
+    assert "access-control-allow-origin" not in bad_origin_res.headers

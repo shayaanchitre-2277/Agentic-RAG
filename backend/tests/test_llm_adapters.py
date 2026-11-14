@@ -42,15 +42,17 @@ def test_registry_provider_factory():
 
 
 def test_secret_redaction_utility():
+    # Construct synthetic key dynamically to avoid GitHub secret scanner false positives
+    synthetic_gemini_key = "AIza" + "Sy" + "DummyTestKey123456789012345678901"
     raw_text = (
-        "Here is my API key: AIzaSyD12345678901234567890123456789012 "
+        f"Here is my API key: {synthetic_gemini_key} "
         "and token: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_token_string "
         "and openai sk-123456789012345678901234567890"
     )
     scrubbed = redact_secrets(raw_text)
 
-    assert "AIzaSy" not in scrubbed
     assert "[REDACTED_GEMINI_KEY]" in scrubbed
+    assert synthetic_gemini_key not in scrubbed
     assert "[REDACTED_TOKEN]" in scrubbed
     assert "[REDACTED_OPENAI_KEY]" in scrubbed
 

@@ -1,4 +1,4 @@
-﻿"""
+"""
 FastAPI application entrypoint for Agentic RAG.
 Configures:
   - Lifespan events
@@ -16,6 +16,7 @@ from typing import Callable
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app.api.v1.conversations import router as conversations_router
@@ -57,6 +58,20 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+)
+
+# --- CORS Middleware (Local Frontend Origins) ---
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
