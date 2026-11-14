@@ -1,16 +1,16 @@
-﻿"""
+"""
 Integration tests for Conversations and Messages API endpoints verifying
-multi-tenant isolation (RLS) using local Supabase.
+multi-tenant isolation (RLS) using local Supabase and FakeClient for LLM generation.
 
 Tests verify:
   1. User A can create, list, retrieve, and delete conversations.
-  2. User A can post messages to their conversation.
-  3. User B receives 404/empty list when attempting to retrieve, post into, or delete User A's conversations.
-  4. Messages and conversations deleted by User A cascade cleanly.
+  2. User A posting a message triggers assistant reply generation via FakeClient and stores both in messages.
+  3. A runs row is created and completed with total_tokens, latency, and cost recorded.
+  4. User B receives 404/empty list when attempting to retrieve, post into, or delete User A's conversations.
+  5. Multi-tenant RLS isolation is strictly preserved.
 """
 
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 import jwt
 import pytest
@@ -18,6 +18,9 @@ from fastapi.testclient import TestClient
 
 from backend.app.core.config import settings
 from backend.app.main import app
+
+# Ensure fake client is used for all tests (₹0 cost, zero network calls)
+settings.LLM_PROVIDER = "fake"
 
 client = TestClient(app)
 
@@ -65,22 +68,32 @@ def test_conversation_lifecycle_and_two_user_rls_isolation(user_a_headers, user_
     assert conv_a["title"] == "Project Alpha Investigation"
     assert conv_a["user_id"] == USER_A_ID
 
-    # --- Step 2: User A posts a message to their conversation ---
+    # --- Step 2: User A posts a message -> Generates assistant reply & completes run ---
     msg_payload = {"content": "What is the status of Task 1?"}
     res_a_msg = client.post(f"/api/v1/conversations/{conv_a_id}/messages", json=msg_payload, headers=user_a_headers)
-    assert res_a_msg.status_code == 201
-    msg_a = res_a_msg.json()
-    assert msg_a["content"] == "What is the status of Task 1?"
-    assert msg_a["role"] == "user"
-    assert msg_a["conversation_id"] == conv_a_id
-    assert msg_a["user_id"] == USER_A_ID
+    assert res_a_msg.status_code == 201, f"Failed message post: {res_a_msg.text}"
+    msg_data = res_a_msg.json()
 
-    # --- Step 3: User A retrieves their conversation with messages ---
+    # Verify response structure contains both user message and assistant message
+    user_msg = msg_data["user_message"]
+    asst_msg = msg_data["assistant_message"]
+    run_id = msg_data["run_id"]
+
+    assert user_msg["content"] == "What is the status of Task 1?"
+    assert user_msg["role"] == "user"
+    assert user_msg["conversation_id"] == conv_a_id
+
+    assert asst_msg["role"] == "assistant"
+    assert "simulated assistant response" in asst_msg["content"].lower()
+    assert asst_msg["conversation_id"] == conv_a_id
+
+    # --- Step 3: User A retrieves their conversation (must contain 2 messages: user + assistant) ---
     res_a_get = client.get(f"/api/v1/conversations/{conv_a_id}", headers=user_a_headers)
     assert res_a_get.status_code == 200
     conv_detail = res_a_get.json()
-    assert len(conv_detail["messages"]) == 1
-    assert conv_detail["messages"][0]["id"] == msg_a["id"]
+    assert len(conv_detail["messages"]) == 2
+    assert conv_detail["messages"][0]["id"] == user_msg["id"]
+    assert conv_detail["messages"][1]["id"] == asst_msg["id"]
 
     # --- Step 4: User A lists conversations (must include conv_a) ---
     res_a_list = client.get("/api/v1/conversations", headers=user_a_headers)

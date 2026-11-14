@@ -1,5 +1,5 @@
-﻿"""
-Pydantic v2 schemas for Conversations and Messages.
+"""
+Pydantic v2 schemas for Conversations, Messages, and Runs.
 """
 
 from datetime import datetime
@@ -23,6 +23,13 @@ class MessageResponse(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
     created_at: datetime
+
+
+class MessagePostResponse(BaseModel):
+    """Returned by POST /conversations/{id}/messages with user message and generated assistant reply."""
+    user_message: MessageResponse
+    assistant_message: MessageResponse
+    run_id: UUID
 
 
 # --- Conversation Schemas ---

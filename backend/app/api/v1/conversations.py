@@ -1,7 +1,8 @@
-﻿"""
-Conversation and message router implementing Phase 1 M1.2 endpoints.
+"""
+Conversation and message router implementing Phase 1 M1.3 endpoints.
 All database access is performed via the user-scoped client dependency (get_user_db),
 ensuring PostgreSQL RLS policies enforce multi-tenant isolation.
+Assistant reply generation is traced through Langfuse and recorded in the runs table.
 """
 
 from typing import List
@@ -12,11 +13,14 @@ from supabase import Client
 
 from backend.app.core.security import AuthenticatedUser, get_current_user
 from backend.app.db.client import get_user_db
+from backend.app.llm.base import LLMClient, LLMMessage, LLMRequest
+from backend.app.llm.registry import get_llm_client
 from backend.app.schemas.conversations import (
     ConversationCreate,
     ConversationDetailResponse,
     ConversationResponse,
     MessageCreate,
+    MessagePostResponse,
     MessageResponse,
 )
 
@@ -143,15 +147,16 @@ def delete_conversation(
 
 @router.post(
     "/{conversation_id}/messages",
-    response_model=MessageResponse,
+    response_model=MessagePostResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Post message to conversation",
+    summary="Post message and generate assistant reply",
 )
-def post_message(
+async def post_message(
     conversation_id: UUID,
     payload: MessageCreate,
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: Client = Depends(get_user_db),
+    llm: LLMClient = Depends(get_llm_client),
 ):
     # 1. Verify that the conversation exists and belongs to the authenticated user
     conv_res = (
@@ -167,22 +172,106 @@ def post_message(
         )
 
     # 2. Store the user message (role="user")
-    insert_data = {
+    user_insert_data = {
         "conversation_id": str(conversation_id),
         "user_id": str(current_user.user_id),
         "role": "user",
         "content": payload.content,
     }
-    msg_res = db.table("messages").insert(insert_data).execute()
-    if not msg_res.data:
+    user_msg_res = db.table("messages").insert(user_insert_data).execute()
+    if not user_msg_res.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to store message",
+            detail="Failed to store user message",
         )
+    user_message = user_msg_res.data[0]
+    user_message_id = user_message["id"]
 
-    # 3. Touch updated_at on the conversation
+    # 3. Create a runs row (status="running", pipeline="walking_skeleton")
+    run_insert_data = {
+        "conversation_id": str(conversation_id),
+        "message_id": user_message_id,
+        "user_id": str(current_user.user_id),
+        "pipeline": "walking_skeleton",
+        "status": "running",
+    }
+    run_res = db.table("runs").insert(run_insert_data).execute()
+    if not run_res.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to initialize run state",
+        )
+    run_row = run_res.data[0]
+    run_id = run_row["id"]
+
+    # 4. Fetch recent conversation history (user-scoped) to construct context
+    history_res = (
+        db.table("messages")
+        .select("role, content")
+        .eq("conversation_id", str(conversation_id))
+        .order("created_at", desc=False)
+        .limit(20)
+        .execute()
+    )
+    messages_history = [
+        LLMMessage(role=m["role"], content=m["content"])
+        for m in (history_res.data or [])
+    ]
+
+    # 5. Call LLM generate
+    llm_request = LLMRequest(
+        messages=messages_history,
+        role_name="assistant",
+        user_id=str(current_user.user_id),
+        session_id=str(conversation_id),
+    )
+
+    try:
+        llm_result = await llm.generate(llm_request)
+    except Exception as exc:
+        # On failure: update run status to failed with clean error message
+        db.table("runs").update({
+            "status": "failed",
+            "error_message": str(exc),
+            "completed_at": "now()",
+        }).eq("id", run_id).execute()
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"LLM generation failed: {str(exc)}",
+        ) from None
+
+    # 6. Store assistant reply
+    assistant_insert_data = {
+        "conversation_id": str(conversation_id),
+        "user_id": str(current_user.user_id),
+        "role": "assistant",
+        "content": llm_result.content,
+    }
+    asst_msg_res = db.table("messages").insert(assistant_insert_data).execute()
+    if not asst_msg_res.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to store assistant reply",
+        )
+    assistant_message = asst_msg_res.data[0]
+
+    # 7. Update run to completed with token and cost metrics
+    db.table("runs").update({
+        "status": "completed",
+        "total_tokens": llm_result.total_tokens,
+        "estimated_cost_usd": llm_result.estimated_cost_usd,
+        "latency_ms": int(llm_result.latency_ms),
+        "completed_at": "now()",
+    }).eq("id", run_id).execute()
+
+    # 8. Touch conversation updated_at
     db.table("conversations").update({"updated_at": "now()"}).eq(
         "id", str(conversation_id)
     ).execute()
 
-    return msg_res.data[0]
+    return MessagePostResponse(
+        user_message=user_message,
+        assistant_message=assistant_message,
+        run_id=UUID(run_id),
+    )
