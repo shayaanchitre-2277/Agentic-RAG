@@ -1,0 +1,49 @@
+# ==============================================================================
+# Docker Ignore - Root
+# Strictly excludes all local secrets, credentials, environments, and caches
+# ==============================================================================
+
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Credentials & OAuth
+credentials/
+*.pem
+*.key
+token.json
+client_secrets*.json
+
+# Virtual environments
+.venv/
+backend/.venv/
+venv/
+env/
+
+# Dependencies & Build artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+build/
+
+# Caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.npm-cache/
+.cache/
+.tmp/
+
+# Git
+.git/
+.github/
+
+# Documentation
+docs/
+

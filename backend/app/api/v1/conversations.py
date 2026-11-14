@@ -9,7 +9,6 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from supabase import Client
 
 from backend.app.core.security import AuthenticatedUser, get_current_user
 from backend.app.db.client import get_user_db
@@ -21,8 +20,8 @@ from backend.app.schemas.conversations import (
     ConversationResponse,
     MessageCreate,
     MessagePostResponse,
-    MessageResponse,
 )
+from supabase import Client
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 

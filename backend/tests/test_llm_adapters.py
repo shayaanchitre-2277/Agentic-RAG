@@ -8,7 +8,6 @@ import pytest
 from backend.app.core.config import settings
 from backend.app.llm.base import LLMMessage, LLMRequest
 from backend.app.llm.fake_client import FakeClient
-from backend.app.llm.gemini_client import GeminiClient
 from backend.app.llm.registry import get_llm_client, resolve_model_for_role
 from backend.app.observability.redaction import redact_secrets
 from backend.app.observability.tracing import trace_generation

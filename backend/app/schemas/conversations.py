@@ -5,8 +5,8 @@ Pydantic v2 schemas for Conversations, Messages, and Runs.
 from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID
-from pydantic import BaseModel, Field, ConfigDict
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Message Schemas ---
 

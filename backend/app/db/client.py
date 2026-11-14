@@ -8,10 +8,10 @@ Strict Architectural Rule (ADR-002):
 """
 
 from fastapi import Depends
-from supabase import Client, ClientOptions, create_client
 
 from backend.app.core.config import settings
 from backend.app.core.security import AuthenticatedUser, get_current_user
+from supabase import Client, ClientOptions, create_client
 
 
 def get_user_db(

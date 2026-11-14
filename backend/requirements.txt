@@ -1,0 +1,11 @@
+# Pinned production runtime dependencies for Agentic RAG FastAPI Backend
+fastapi==0.162.5
+uvicorn==0.54.0
+pydantic==2.14.3
+pydantic-settings==2.16.2
+pyjwt[crypto]==2.15.1
+httpx==0.28.1
+supabase==2.34.1
+google-genai==3.1.0
+langfuse==5.2.0
+

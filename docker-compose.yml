@@ -1,0 +1,41 @@
+# ==============================================================================
+# Docker Compose for Agentic RAG Local Full-Stack Deployment
+# Defines Backend (FastAPI on port 8000) and Frontend (Nginx on port 5173)
+# ==============================================================================
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: agentic-rag-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - APP_ENV=development
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+      - SUPABASE_URL=http://host.docker.internal:54321
+      - LLM_PROVIDER=gemini
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=http://127.0.0.1:54321
+        - VITE_SUPABASE_ANON_KEY=placeholder-local-anon-key
+        - VITE_API_BASE_URL=http://127.0.0.1:8000
+    container_name: agentic-rag-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+

@@ -23,6 +23,7 @@ from backend.app.api.v1.conversations import router as conversations_router
 from backend.app.api.v1.health import router as health_router
 from backend.app.core.config import settings
 
+
 # Custom Formatter that safely handles optional request_id
 class RequestIdFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:

@@ -4,6 +4,7 @@ Simulates token counts and latency without making any network requests.
 """
 
 import time
+
 from backend.app.llm.base import LLMClient, LLMRequest, LLMResult
 from backend.app.observability.tracing import trace_generation
 

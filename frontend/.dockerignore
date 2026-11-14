@@ -1,0 +1,18 @@
+# ==============================================================================
+# Docker Ignore - Frontend
+# Excludes local environments, caches, and build outputs
+# ==============================================================================
+
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+.npm-cache/
+npm-debug.log*
+
+.git/
+.vscode/
+.idea/
+

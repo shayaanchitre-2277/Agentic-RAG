@@ -78,6 +78,7 @@ def test_conversation_lifecycle_and_two_user_rls_isolation(user_a_headers, user_
     user_msg = msg_data["user_message"]
     asst_msg = msg_data["assistant_message"]
     run_id = msg_data["run_id"]
+    assert run_id is not None
 
     assert user_msg["content"] == "What is the status of Task 1?"
     assert user_msg["role"] == "user"
